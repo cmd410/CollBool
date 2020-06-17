@@ -1,14 +1,18 @@
 import bpy
 
+
 bl_info = {
     "name": "CollBool",
     "description": "Addon that allows to do auto booleans with collections",
     "author": "Crystal Melting Dot",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (2, 80, 0),
     "category": "Mesh",
     "location": "Object properties -> CollBool"
 }
+
+
+dont_change = False   # To not add/remove any modifiers while they are applied
 
 
 def validate_collection(self, coll):
@@ -25,7 +29,8 @@ def validate_collection(self, coll):
 
 
 def usage_update(self, context):
-    if self.use: return
+    global dont_change
+    if self.use or dont_change: return
     modifiers = context.object.modifiers
     for i in modifiers:
         if i.type == 'BOOLEAN' and i.name.startswith('collbool_'):
@@ -70,6 +75,8 @@ def handle_collbool(obj, coll, operation):
 
 @bpy.app.handlers.persistent
 def scene_update(scene):
+    global dont_change
+    if dont_change: return
     for obj in scene.objects:
         if obj.type != 'MESH': continue
         if not obj.collbool_settings.use: continue
@@ -91,6 +98,38 @@ def scene_update(scene):
             if any([mod.name.endswith(f'_{name}') for name in names]):
                 continue
             obj.modifiers.remove(mod)
+
+
+class ApplyCollBoolOperator(bpy.types.Operator):
+    '''Apply collection booleans. 
+    WARNING: First manually apply all modifiers above boolean or result might be very wrong'''
+    bl_idname = "object.collbool"
+    bl_label = "Apply"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return \
+            all([context.mode == 'OBJECT',
+                 context.active_object,
+                 context.active_object.type == 'MESH',
+                 context.active_object.collbool_settings.use])
+
+    def execute(self, context):
+        global dont_change
+        obj = context.active_object
+        dont_change = True
+        obj.collbool_settings.use = False
+        for mod in obj.modifiers:
+            if not mod.name.startswith('collbool_'):
+                continue
+            if not mod.object:
+                obj.modifiers.remove(mod)
+                continue
+            bpy.ops.object.modifier_apply(modifier=mod.name)
+        dont_change = False
+        self.report({'INFO'}, "Collection boolean applied!")
+        return {'FINISHED'}
 
 
 class CollBoolSettings(bpy.types.PropertyGroup):
@@ -131,7 +170,9 @@ class ObjectSelectPanel(bpy.types.Panel):
     def draw(self, context):
         settings = context.object.collbool_settings
         layout = self.layout
-        layout.prop(settings, 'use')
+        row = layout.row()
+        row.prop(settings, 'use')
+        row.operator(ApplyCollBoolOperator.bl_idname)
         if settings.use:
             layout.prop(settings, 'diff')
             layout.prop(settings, 'unio')
@@ -140,6 +181,7 @@ class ObjectSelectPanel(bpy.types.Panel):
 
 classes = [
     CollBoolSettings,
+    ApplyCollBoolOperator,
     ObjectSelectPanel
 ]
 
