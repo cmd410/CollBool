@@ -1,5 +1,5 @@
 # CollBool
-CollBool is an addon for [Blender](blender.org) that allows you to do auto booleans with collections!
+CollBool is an addon for [Blender](https://blender.org/) that allows you to do auto booleans with collections!
 
 ## Why?
 
